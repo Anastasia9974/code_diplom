@@ -1,0 +1,16 @@
+{
+  "without_attacks": {
+    "name_dataset":"cifar10",
+    "test_percent":10,
+    "batch_size": 512,
+    "epochs":2,
+    "num_client":4,
+    "num_infected_clients":0,
+    "bad_clients": [],
+    "num_round":3,
+    "aggregation_strategy": "reliable_aggregation",
+    "filter": "not",
+    "attacks": "not",
+    "mode_work": "not"
+  }
+}
