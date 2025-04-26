@@ -3,7 +3,7 @@ from torchvision import datasets, transforms
 import torch
 import tensorflow as tf
 import numpy as np
-class WorkWithDataset():
+class WorkWithDataset:
     # Сначала ведется получение датасетов
     def __init__(self):
         self.test_ds = None
@@ -14,28 +14,33 @@ class WorkWithDataset():
         self.testloader_server = None
         self.trainloader_server = None
     def download_dataset(self, data_name: str):
-        path = f"./new_code/training_data/{data_name}/"
+        path = f"/home/anvi/code_diplom/new_code/training_data/{data_name}/"
         if data_name == 'cifar10':
             print("Downloading CIFAR10 dataset")
             transform = transforms.Compose([
                 transforms.ToTensor(),  # Преобразуем изображение в тензор (C, H, W)
-                transforms.Lambda(lambda x: x.permute(1, 2, 0)),  # Меняем оси (H, W, C) и в NumPy
-                transforms.Lambda(lambda x: x / 255.0)  # Нормализация 0-1
+                transforms.Normalize(
+                    (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                transforms.Lambda(lambda x: x.permute(1, 2, 0))  # Меняем оси (H, W, C) и в NumPy
             ])
             self.train_ds = datasets.CIFAR10(root=path, download=True, train=True, transform=transform)
             self.test_ds = datasets.CIFAR10(root=path, download=True, train=False, transform=transform)
 
-        elif data_name == 'fashionmnist':
-            print("Downloading FashionMNIST dataset")
-            self.train_ds = datasets.FashionMNIST(root=path, download=True, train=True, )
-            self.test_ds = datasets.FashionMNIST(root=path, download=True, train=False, )
-        elif data_name == 'my':
-            print("Downloading MY dataset")
+        elif data_name == 'mnist':
+            print("Downloading MNIST dataset")
+            transform = transforms.Compose([
+                transforms.ToTensor(),  # (1, 28, 28)
+                transforms.Normalize((0.1307,), (0.3081,)),  # Сначала нормализация
+                transforms.Lambda(lambda x: x.permute(1, 2, 0)),  # Потом (28, 28, 1)
+            ])
+            self.train_ds = datasets.MNIST(root=path, download=True, train=True, transform=transform)
+            self.test_ds = datasets.MNIST(root=path, download=True, train=False, transform=transform)
+
         else:
             print("Not a valid dataset")
     # обработка данных
-    def data_processing(self, batch_size:int = 64):
-        def dataset_to_tf(dataset, batch_size):
+    def data_processing(self, input_shape, batch_size:int = 512):
+        def dataset_to_tf(dataset, batch_size, input_shape):
             def generator():
                 for image, label in dataset:
                     yield image.numpy(), np.int32(label)  # Преобразуем PyTorch-данные
@@ -43,16 +48,16 @@ class WorkWithDataset():
             return tf.data.Dataset.from_generator(
                 generator,
                 output_signature=(
-                    tf.TensorSpec(shape=(32, 32, 3), dtype=tf.float32),
+                    tf.TensorSpec(shape=input_shape, dtype=tf.float32),
                     tf.TensorSpec(shape=(), dtype=tf.int32)
                 )
             ).batch(batch_size)
 
-        self.trainloader_server = dataset_to_tf(self.train_ds,batch_size)
-        self.testloader_server = dataset_to_tf(self.test_ds,batch_size)
+        self.trainloader_server = dataset_to_tf(self.train_ds,batch_size, input_shape=input_shape)
+        self.testloader_server = dataset_to_tf(self.test_ds,batch_size, input_shape=input_shape)
         for i in range(len(self.trainloader_client)):
-            self.trainloader_client[i] = dataset_to_tf(self.trainloader_client[i],batch_size)
-            self.testloader_client[i] = dataset_to_tf(self.testloader_client[i],batch_size)
+            self.trainloader_client[i] = dataset_to_tf(self.trainloader_client[i],batch_size, input_shape=input_shape)
+            self.testloader_client[i] = dataset_to_tf(self.testloader_client[i],batch_size, input_shape=input_shape)
     # деление датасета на всех клиентов
     def data_division(self, num_client: int, test_percent: int):
         partition_size = int(len(self.train_ds) / num_client)

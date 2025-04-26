@@ -80,7 +80,7 @@ def get_client_fn_with_data(epochs:int, batch_size, attacks, bad_clients,  data_
         print(f"[Client {cid}] client_fn")
         client_id = cid
         # Load model and data
-        input_shape = data_for_cl["train_data"][int(client_id)][0][0].squeeze().shape
+        input_shape = data_for_cl["train_data"][int(client_id)][0][0].shape
         model = CNN(input_shape=input_shape)
         if attacks == "backdoor" and (int(client_id) in bad_clients):
             print(f"bad_clients: {bad_clients}")

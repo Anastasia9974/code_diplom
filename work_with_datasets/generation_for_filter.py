@@ -38,17 +38,19 @@ class FuzzGeneration:
     def _getDataSetTransformation(self, dname):
         if dname in ["CIFAR10", "cifar10"]:
             return transforms.Compose([
-                transforms.Lambda(lambda x: x.permute(0, 2, 1)),  # Меняем оси (H, W, C) и в NumPy
-                transforms.Lambda(lambda x: x / 255.0)  # Нормализация 0-1
+                transforms.Normalize(
+                    (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                transforms.Lambda(lambda x: x.permute(0, 2, 1))  # Меняем оси (H, W, C) и в NumPy
             ])
         #elif dname in ["femnist", "mnist"]:
          #   return torchvision.transforms.Compose([
          #       # torchvision.transforms.ToTensor(),
          #       torchvision.transforms.Normalize((0.1307,), (0.3081,))
          #   ])
-        elif dname == "fashionmnist":
+        elif dname == "mnist":
             return torchvision.transforms.Compose([
-                torchvision.transforms.Normalize((0.5,), (0.5,))
+                torchvision.transforms.Normalize((0.1307,), (0.3081,)),
+                transforms.Lambda(lambda x: x.permute(0, 2, 1)),  # Меняем оси (H, W, C) и в NumPy
             ])
         else:
             raise Exception(f"Dataset {dname} not supported")
@@ -79,5 +81,4 @@ class FuzzGeneration:
 
         # Приведем к типу, ожидаемому Keras
         img = img.to(dtype=torch.float32)
-        print(img.shape)
         return img

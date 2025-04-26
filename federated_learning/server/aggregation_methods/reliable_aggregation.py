@@ -18,7 +18,7 @@ from flwr.common import (
 
 import numpy as np
 from new_code.federated_learning.NN.model import CNN
-from new_code.conf import resualt_work, conf_app
+from new_code.conf import resualt_work
 
 # class Clipping():
 #     def __init__(self, tau, n_iter=1):
@@ -52,9 +52,9 @@ from new_code.conf import resualt_work, conf_app
 
 #делаем наследником fl.server.strategy.FedAvg, чтобы не переопределять кучу классов
 class ReliableAggregation(fl.server.strategy.FedAvg):
-    def __init__(self, tau, filter_func, part_math_wait, input_shape, n_iter=1):
+    def __init__(self, tau, filter_func, part_math_wait, input_shape, i_iter=1):
         self.tau = tau
-        self.n_iter = n_iter
+        self.i_iter = i_iter
         self.filter_func = filter_func
         self.part_math_wait = part_math_wait,
         self.input_shape = input_shape
@@ -72,7 +72,7 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
                                  client, fit_res in results}
         for client, fit_res in results:
             print(f"\n **** Custom Metrics from clients: client : {client.cid}, metrics: {fit_res.metrics}")
-        malacious_clients2conf, acc = self.run_filter(client2model_ws=provdict["client2ws"])
+        malacious_clients2conf, _ = self.run_filter(client2model_ws=provdict["client2ws"])
 
         weights_list = [parameters_to_ndarrays(fit_res.parameters) for _, fit_res in results]
         n_clients = len(weights_list)
@@ -81,7 +81,7 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
         center = [sum(layer) / n_clients for layer in zip(*weights_list)]
 
         # 2. Итеративное обновление центра
-        for _ in range(self.n_iter):
+        for _ in range(self.i_iter):
             clipped_deltas_list = []
             for weights in weights_list:
                 # Δ_i = W_i - center
@@ -104,7 +104,9 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
         agg_weights = center
         aggregated_metrics = {"example_metric": 1.0}
         resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"][f"rounds_{server_round}"]=[[arr.tolist() for arr in agg_weights], 0]
-        resualt_work.resualt_for_param_agg1[f"i_iter_{self.tau}"][f"rounds_{server_round}"]=[[arr.tolist() for arr in agg_weights], 0]
+        resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"][f"rounds_{server_round}"]=[[arr.tolist() for arr in agg_weights], 0]
+        for heading in resualt_work.resualt_FL:
+            resualt_work.resualt_FL[heading][f"rounds_{server_round}"] = [[arr.tolist() for arr in agg_weights], 0, malacious_clients2conf]
         return ndarrays_to_parameters(agg_weights), aggregated_metrics
 
     def run_filter(self, client2model_ws):

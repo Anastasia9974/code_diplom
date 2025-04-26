@@ -1,4 +1,4 @@
-from new_code.conf import  conf_app
+from new_code.conf import  conf_app, resualt_work
 
 def get_conf(data_with_conf):
     for key in data_with_conf:
@@ -44,5 +44,10 @@ def set_default_conf():
     conf_app.NN_conf["epochs"] = 0
     conf_app.view_resualt["mode_work"] = "not"
 
+def set_default_result():
+    resualt_work.resualt_FL = {}
+    resualt_work.resualt_for_param_agg1 = {}
+    resualt_work.resualt_for_param_agg2 = {}
+    resualt_work.resualt_get_data_for_model = {}
 #get_conf(name_file_conf="conf.json")
 

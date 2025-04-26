@@ -1,10 +1,11 @@
 import flwr as fl
 import numpy as np
-from flwr.common import (FitRes, Parameters, Scalar)
+from flwr.common import (FitRes, Parameters, Scalar, parameters_to_ndarrays)
 from typing import Dict, List, Optional, Tuple, Union
 from flwr.server.client_proxy import ClientProxy
 from new_code.federated_learning.server.aggregation_methods.WorkWithParam import getWeightsByParam
 from new_code.federated_learning.NN.model import CNN
+from new_code.conf import resualt_work
 from new_code.work_with_file_resualts.write_in_file import write_in_file_csv
 #добавить возможно сохранение верультатов обучения, но это дальше
 class FedAvgCustomStrategy(fl.server.strategy.FedAvg):
@@ -55,6 +56,8 @@ class FedAvgCustomStrategy(fl.server.strategy.FedAvg):
 
         if aggregated_parameters is not None:
             provdict["gm_ws"] = getWeightsByParam(aggregated_parameters, input_shape=self.input_shape)
+        for heading in resualt_work.resualt_FL:
+            resualt_work.resualt_FL[heading][f"rounds_{server_round}"] = [[arr.tolist() for arr in parameters_to_ndarrays(aggregated_parameters)], 0, malacious_clients2conf]
         return aggregated_parameters, aggregated_metrics
 
     def run_filter(self, client2model_ws):

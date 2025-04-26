@@ -26,7 +26,7 @@ def getBackDoorPatterGrey(shape):
 
 def backdoor(train_ds, clients_id):
     print(f"Injecting backdoor to client {clients_id}")
-    s = train_ds[0][0].squeeze().shape
+    s = train_ds[0][0].shape
     backdor_dataset = AttackBackdoor(dataset=train_ds, class_ids_to_poison=[0, 1, 2, 3, 4, 5, 6, 7, 8],
                                      attack_pattern=getBackDoorPatterGrey(s), backdoor_target_class_id=9)
     train_ds = backdor_dataset

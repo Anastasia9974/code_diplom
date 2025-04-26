@@ -18,7 +18,7 @@ class FederatedServer:
         self.name_strategy = name_strategy
         self.num_rounds = num_rounds
         self.filter = filter
-        self.input_shape = conf_app.data_for_cl["train_data"][0][0][0].squeeze().shape
+        self.input_shape = conf_app.data_for_cl["train_data"][0][0][0].shape
         self.parameters_model = ndarrays_to_parameters(CNN(input_shape= self.input_shape).model.get_weights())
         self.config_server = flwr.server.ServerConfig(num_rounds=self.num_rounds)
         self.num_clients = num_clients
@@ -30,7 +30,7 @@ class FederatedServer:
         if self.name_strategy == "FedAvg":
             strategy = FedAvgCustomStrategy(filter_func=filter_func, part_math_wait=self.part_math_wait, input_shape=self.input_shape)
         elif self.name_strategy == "reliable_aggregation":
-            strategy = ReliableAggregation(tau=self.tau, n_iter=self.i_iter, filter_func=filter_func, part_math_wait=self.part_math_wait, input_shape=self.input_shape)
+            strategy = ReliableAggregation(tau=self.tau, i_iter=self.i_iter, filter_func=filter_func, part_math_wait=self.part_math_wait, input_shape=self.input_shape)
         else:
             print("Invalid name_strategy")
             raise NotImplementedError
@@ -57,8 +57,9 @@ class FederatedServer:
         elif conf_app.view_resualt["mode_work"] == "change_param_agg_2":
             num_test = 10
         for i in range(num_test):
-            resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"] = {}
-            resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"] = {}
+            resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"] = {"data_name":conf_app.database_conf["name_dataset"]}
+            resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"] = {"data_name":conf_app.database_conf["name_dataset"]}
+
             history = flwr.simulation.start_simulation(
                 client_fn=get_client_fn_with_data(epochs=conf_app.NN_conf["epochs"],
                                                   batch_size=conf_app.database_conf["batch_size"],
@@ -72,10 +73,24 @@ class FederatedServer:
             for rnd, loss in enumerate(history.losses_distributed, start=1):
                 print(f"Round {rnd}: {loss[1]}")
                 resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"][f"rounds_{rnd}"][1] = loss[1]
-                resualt_work.resualt_for_param_agg1[f"i_iter_{self.tau}"][f"rounds_{rnd}"][1] = loss[1]
+                resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"][f"rounds_{rnd}"][1] = loss[1]
+                for heading in resualt_work.resualt_FL:
+                    resualt_work.resualt_FL[heading][f"rounds_{rnd}"][1] = loss[1]
             if conf_app.view_resualt["mode_work"] == "change_param_agg_1":
                 self.tau += 1
-            elif conf_app.view_resume["mode_work"] == "change_param_agg_2":
+            elif conf_app.view_resualt["mode_work"] == "change_param_agg_2":
                 self.i_iter += 1
         write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_tau.json", data = resualt_work.resualt_for_param_agg1)
         write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_i_iter.json", data = resualt_work.resualt_for_param_agg2)
+
+
+
+
+
+        # part_math_wait = 0.01
+        # while part_math_wait< 0.8:
+        #     fl_server = FederatedServer(name_strategy=conf_app.security_conf["aggregation_strategy"],
+        #                             num_rounds=conf_app.FL_conf["num_round"],
+        #                             num_clients=conf_app.FL_conf["num_client"], filter=conf_app.security_conf["filter"], part_math_wait=part_math_wait)
+        #     fl_server.start_train()
+        #     part_math_wait = part_math_wait+0.01
