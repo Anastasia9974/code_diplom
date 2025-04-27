@@ -7,7 +7,7 @@ class Config:
     #настройка бд, что результаты хранит
     database_conf = {"name_dataset":"", "test_percent":0, "batch_size": 0}
     #настройка безопасности
-    security_conf = {"aggregation_strategy": "", "filter": "not", "name_situation":""}
+    security_conf = {"aggregation_strategy": "", "filter": "not", "name_situation":"", "part_math_wait": 0.5}
     #сами данные
     data_for_cl = {"train_data":[], "test_data":[], "all_train_data":[], "all_test_data":[]}
     #настройка результатов, то есть что за данные собираются

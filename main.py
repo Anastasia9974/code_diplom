@@ -45,7 +45,7 @@ if "__main__" == __name__:
         # model = CNN()
         # model.show_arhitecture()
         # инициализация федеративного обучения
-        part_math_wait = 0.1
+        part_math_wait = conf_app.security_conf["part_math_wait"]
         fl_server = FederatedServer(name_strategy=conf_app.security_conf["aggregation_strategy"],
                                     num_rounds=conf_app.FL_conf["num_round"],
                                     num_clients=conf_app.FL_conf["num_client"], filter=conf_app.security_conf["filter"],

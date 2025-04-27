@@ -43,6 +43,7 @@ def set_default_conf():
     conf_app.FL_conf["attacks"] = ""
     conf_app.NN_conf["epochs"] = 0
     conf_app.view_resualt["mode_work"] = "not"
+    conf_app.security_conf["part_math_wait"] =  0.5
 
 def set_default_result():
     resualt_work.resualt_FL = {}

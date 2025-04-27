@@ -18,7 +18,7 @@ from flwr.common import (
 
 import numpy as np
 from new_code.federated_learning.NN.model import CNN
-from new_code.conf import resualt_work
+from new_code.conf import resualt_work, conf_app
 
 # class Clipping():
 #     def __init__(self, tau, n_iter=1):
@@ -56,9 +56,10 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
         self.tau = tau
         self.i_iter = i_iter
         self.filter_func = filter_func
-        self.part_math_wait = part_math_wait,
+        self.part_math_wait = part_math_wait
         self.input_shape = input_shape
         self.momentum = None
+        self.server_round = 0
         super().__init__()
 
     def aggregate_fit(self,
@@ -66,19 +67,23 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
                       results: List[Tuple[fl.server.client_proxy.ClientProxy, fl.common.FitRes]],
                       failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]], ) \
             -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
-
+        self.server_round = server_round
         provdict = {}
-        provdict["client2ws"] = {client.cid: getWeightsByParam(fit_res.parameters, input_shape=self.input_shape) for
+        provdict["client2ws"] = {client.partition_id: getWeightsByParam(fit_res.parameters, input_shape=self.input_shape) for
                                  client, fit_res in results}
         for client, fit_res in results:
-            print(f"\n **** Custom Metrics from clients: client : {client.cid}, metrics: {fit_res.metrics}")
+            print(f"\n **** Custom Metrics from clients: client : {client.partition_id}, metrics: {fit_res.metrics}")
         malacious_clients2conf, _ = self.run_filter(client2model_ws=provdict["client2ws"])
+        self.update_results_client(malacious_clients2confidence=malacious_clients2conf, results=results)
 
         weights_list = [parameters_to_ndarrays(fit_res.parameters) for _, fit_res in results]
+        client_weights = np.array([fit_res.num_examples for _, fit_res in results], dtype=np.float32)
+        client_weights_sum = np.sum(client_weights)
+        client_weights = client_weights / (client_weights_sum + 1e-6)
         n_clients = len(weights_list)
 
         # 1. Начальная инициализация центра
-        center = [sum(layer) / n_clients for layer in zip(*weights_list)]
+        center = [sum(w * client_weights[i] for i, w in enumerate(layer)) for layer in zip(*weights_list)]
 
         # 2. Итеративное обновление центра
         for _ in range(self.i_iter):
@@ -95,7 +100,7 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
                 clipped_deltas_list.append(clipped_deltas)
 
             # 3. Усреднение обрезанных дельт
-            avg_deltas = [sum(layer_deltas) / n_clients for layer_deltas in zip(*clipped_deltas_list)]
+            avg_deltas = [sum(d * client_weights[i] for i, d in enumerate(layer_deltas)) for layer_deltas in zip(*clipped_deltas_list)]
 
             # 4. Обновление центра
             center = [c + delta for c, delta in zip(center, avg_deltas)]
@@ -121,11 +126,13 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
         print(f"malacious_clients2confidence:{malacious_clients2confidence}")
         min_nk = min([r[1].num_examples for r in results])
         for i in range(len(results)):
-            cid =  results[i][0].cid
+            cid =  results[i][0].partition_id
             if cid in malacious_clients2confidence:
                 before = results[i][1].num_examples
-                #то есть если доверие меньше 70 процентов, то он обнуляется
-                if malacious_clients2confidence[cid] <= 0.6:
+                #то есть если доверие меньше 60 процентов, то он обнуляется
+                if malacious_clients2confidence[cid] < 0.6:
+                    if not(cid in conf_app.FL_conf["bad_clients"]):
+                        resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"]["result"] = False
                     results[i][1].num_examples = 0
                 else:
                     results[i][1].num_examples = int(min_nk * (malacious_clients2confidence[cid]))

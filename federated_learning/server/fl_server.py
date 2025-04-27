@@ -56,10 +56,12 @@ class FederatedServer:
             num_test = 400
         elif conf_app.view_resualt["mode_work"] == "change_param_agg_2":
             num_test = 10
+        elif conf_app.view_resualt["mode_work"] == "change_param_filter":
+            num_test = int(0.7/0.01)
         for i in range(num_test):
             resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"] = {"data_name":conf_app.database_conf["name_dataset"]}
             resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"] = {"data_name":conf_app.database_conf["name_dataset"]}
-
+            resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"] = {"result":True}
             history = flwr.simulation.start_simulation(
                 client_fn=get_client_fn_with_data(epochs=conf_app.NN_conf["epochs"],
                                                   batch_size=conf_app.database_conf["batch_size"],
@@ -72,25 +74,20 @@ class FederatedServer:
             )
             for rnd, loss in enumerate(history.losses_distributed, start=1):
                 print(f"Round {rnd}: {loss[1]}")
-                resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"][f"rounds_{rnd}"][1] = loss[1]
-                resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"][f"rounds_{rnd}"][1] = loss[1]
+                if self.name_strategy == "reliable_aggregation":
+                    resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"][f"rounds_{rnd}"][1] = loss[1]
+                    resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"][f"rounds_{rnd}"][1] = loss[1]
+                resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"]["loss"] = loss[1]
                 for heading in resualt_work.resualt_FL:
                     resualt_work.resualt_FL[heading][f"rounds_{rnd}"][1] = loss[1]
             if conf_app.view_resualt["mode_work"] == "change_param_agg_1":
                 self.tau += 1
             elif conf_app.view_resualt["mode_work"] == "change_param_agg_2":
                 self.i_iter += 1
-        write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_tau.json", data = resualt_work.resualt_for_param_agg1)
-        write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_i_iter.json", data = resualt_work.resualt_for_param_agg2)
+            elif conf_app.view_resualt["mode_work"] == "change_param_filter":
+                self.part_math_wait += 0.01
+        if self.name_strategy == "reliable_aggregation":
+            write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_tau.json", data = resualt_work.resualt_for_param_agg1)
+            write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_i_iter.json", data = resualt_work.resualt_for_param_agg2)
+        write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/data_for_model.json", data = resualt_work.resualt_get_data_for_model)
 
-
-
-
-
-        # part_math_wait = 0.01
-        # while part_math_wait< 0.8:
-        #     fl_server = FederatedServer(name_strategy=conf_app.security_conf["aggregation_strategy"],
-        #                             num_rounds=conf_app.FL_conf["num_round"],
-        #                             num_clients=conf_app.FL_conf["num_client"], filter=conf_app.security_conf["filter"], part_math_wait=part_math_wait)
-        #     fl_server.start_train()
-        #     part_math_wait = part_math_wait+0.01

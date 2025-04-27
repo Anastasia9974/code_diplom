@@ -9,74 +9,88 @@ from new_code.work_with_datasets.generation_for_filter import FuzzGeneration
 from keras import Model
 import keras
 import tensorflow as tf
+import numpy as np
 
 
-
-# def get_activations(model, input_tensor, target_class_index=1):
-#     _ = model(input_tensor, training=False)
-#     print(model.input)
-#     # Получаем выходы всех слоев
-#     outputs = [layer.output for layer in model.layers if isinstance(layer, layers.Conv2D) or isinstance(layer, layers.Dense)]
-#     # Создаем новую модель: вход — такой же, выход — все активации
-#     activation_model = Model(inputs=model.input, outputs=outputs)
-#
-#     # Используем GradientTape для записи операций
-#     with tf.GradientTape(persistent=True) as tape:
-#         tape.watch(input_tensor)
-#
-#         # Получаем активации с нужных слоев
-#         activations = activation_model(input_tensor, training=False)
-#
-#         # Получаем предсказание исходной модели
-#         preds = model(input_tensor, training=False)
-#
-#         # Получаем логит соответствующего класса
-#         target_logit = preds[:, target_class_index]
-#
-#     # Список для хранения grad × activation
-#     grad_times_act = []
-#
-#     for activation in activations:
-#         # Вычисляем градиент логита по активации
-#         grads = tape.gradient(target_logit, activation)
-#
-#         # Перемножаем поэлементно
-#         grad_x_act = grads * activation
-#
-#         # Сплющиваем
-#         grad_x_act_flat = tf.reshape(grad_x_act, [-1])
-#         grad_times_act.append(grad_x_act_flat)
-#
-#     # Конкатенируем все
-#     final_vector = tf.concat(grad_times_act, axis=0)
-#
-#     return final_vector, grad_times_act
-
-def get_activations(model, input_tensor, target_class_index=1):
+def get_activations(model, img):
     # Преобразуем PyTorch тензор в NumPy массив
-    torch_tensor_numpy = input_tensor.detach().cpu().numpy()  # Используем .detach() чтобы избежать зависимостей от графа, если это требуется
+    torch_tensor_numpy = img.detach().cpu().numpy()  # Используем .detach() чтобы избежать зависимостей от графа, если это требуется
     # Преобразуем NumPy массив в TensorFlow тензор
-    input_tensor = tf.convert_to_tensor(torch_tensor_numpy, dtype=tf.float32)
-
-    _ = model(input_tensor, training=False)
+    img = tf.convert_to_tensor(torch_tensor_numpy, dtype=tf.float32)
+    img = tf.Variable(img)  # нужно, чтобы у img можно было считать градиент
+    _ = model(img, training=False)
     # Получаем выходы всех слоев
-    outputs = [layer.output for layer in model.layers if 'activation' in layer.name or 'conv' in layer.name]
+    outputs = [layer.output for layer in model.layers]
     # Создаем новую модель: вход — такой же, выход — все активации
     activation_model = Model(inputs=model.inputs, outputs=outputs)
-    # Получаем активации
-    activations = activation_model(input_tensor, training=False)
-    # Сплющиваем каждый слой
-    flat_activations = [tf.reshape(act, [-1]) for act in activations]
+    with tf.GradientTape() as tape:
+        tape.watch(img)  # Следим за img для вычисления градиента
+        activations = activation_model(img, training=False)
 
-    # Объединяем в один вектор
-    flat_vector = tf.concat(flat_activations, axis=0)
+    grads = tape.gradient(activations[-1], img)
 
-    return flat_vector, flat_activations
+    grad_times_activations = []
+    layer2output = []
+    all_activations = []  # Список для всех активаций
 
-    # Конкатенируем все grad * activation
-    final_vector = tf.concat(grad_times_act, axis=0) if grad_times_act else None
+    for activation in activations:
+        # Получаем количество активированных нейронов для данного слоя
+        if len(activation.shape) > 3:  # Если 4D (batch_size, height, width, channels)
+            # Для свёрточных слоев
+            active_neurons = tf.reduce_sum(tf.cast(activation > 0, tf.float32)).numpy()  # Считаем активированные нейроны
+        elif len(activation.shape) == 2:  # Если 2D (batch_size, features)
+            # Для полносвязанных слоёв
+            active_neurons = tf.reduce_sum(tf.cast(activation > 0, tf.float32)).numpy()  # Считаем активированные нейроны
+        else:
+            active_neurons = 0
 
-    return final_vector
+        # Обрабатываем активации для градиентов
+        if len(grads.shape) > 1 and len(activation.shape) > 3:  # Если 4D (batch_size, height, width, channels)
+            # Изменяем размер градиентов, если необходимо
+            if grads.shape[1:3] != activation.shape[1:3]:
+                grads_resized = tf.image.resize(grads, size=(activation.shape[1], activation.shape[2]))
+            else:
+                grads_resized = grads
+            grad_times_activation = grads_resized * activation
+            grad_times_activations.append(grad_times_activation)
+        elif len(activation.shape) == 2:  # Если 2D (batch_size, features)
+            # Просто пропускаем или обрабатываем по-другому (зависит от задачи)
+            grad_times_activations.append(None)
+        else:
+            grad_times_activations.append(None)
+
+        # Сплющиваем активацию для каждого слоя
+        flattened_activation = tf.reshape(activation, [-1])  # Сплющиваем активацию для данного слоя
+        layer2output.append(flattened_activation)  # Добавляем сплющенные активации для данного слоя
+        all_activations.append(flattened_activation.numpy())  # Добавляем в список для всех слоев
+
+    # Конкатенируем все активации в одну
+    concatenated_activations = np.concatenate(all_activations, axis=0)
+
+    # Возвращаем объединенные активации и список слоёв с их активациями
+    return concatenated_activations, layer2output
+
+# def get_activations(model, input_tensor, target_class_index=1):
+#     # Преобразуем PyTorch тензор в NumPy массив
+#     torch_tensor_numpy = input_tensor.detach().cpu().numpy()  # Используем .detach() чтобы избежать зависимостей от графа, если это требуется
+#     # Преобразуем NumPy массив в TensorFlow тензор
+#     input_tensor = tf.convert_to_tensor(torch_tensor_numpy, dtype=tf.float32)
+#
+#     _ = model(input_tensor, training=False)
+#     # Получаем выходы всех слоев
+#     outputs = [layer.output for layer in model.layers if 'activation' in layer.name or 'conv' in layer.name]
+#     # Создаем новую модель: вход — такой же, выход — все активации
+#     activation_model = Model(inputs=model.inputs, outputs=outputs)
+#     # Получаем активации
+#     activations = activation_model(input_tensor, training=False)
+#     # Сплющиваем каждый слой
+#     flat_activations = [tf.reshape(act, [-1]) for act in activations]
+#
+#     # Объединяем в один вектор
+#     flat_vector = tf.concat(flat_activations, axis=0)
+#
+#     return flat_vector, flat_activations
+
 
 def getNeuronCoverage(model, img):
     r = get_activations(model, img)
@@ -95,7 +109,6 @@ class fedDefender:
         self.round = round
         self.fuzz_gen_data = None
         self.clients2fuzzinputs_neurons_activations = {}
-        #self.client2layeracts = {}
         self.all_fedfuzz_seqs = []
         self.participating_clients_ids = None
         self.all_combinations = None

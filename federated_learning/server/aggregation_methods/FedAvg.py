@@ -5,14 +5,15 @@ from typing import Dict, List, Optional, Tuple, Union
 from flwr.server.client_proxy import ClientProxy
 from new_code.federated_learning.server.aggregation_methods.WorkWithParam import getWeightsByParam
 from new_code.federated_learning.NN.model import CNN
-from new_code.conf import resualt_work
+from new_code.conf import resualt_work, conf_app
 from new_code.work_with_file_resualts.write_in_file import write_in_file_csv
 #добавить возможно сохранение верультатов обучения, но это дальше
 class FedAvgCustomStrategy(fl.server.strategy.FedAvg):
     def __init__(self, filter_func, part_math_wait, input_shape):
         self.filter_func = filter_func
-        self.part_math_wait = part_math_wait,
+        self.part_math_wait = part_math_wait
         self.input_shape = input_shape
+        self.server_round = 0
         super().__init__()
     def aggregate_fit(
             self,
@@ -21,13 +22,14 @@ class FedAvgCustomStrategy(fl.server.strategy.FedAvg):
             failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
         #Вызовите aggregate_fit из базового класса (FedAvg) для агрегирования параметров и метрик
+        self.server_round = server_round
         provdict = {}
-        provdict["client2ws"] = {client.cid: getWeightsByParam(fit_res.parameters, input_shape=self.input_shape) for
-                                 client, fit_res in results}
-        print(len(provdict["client2ws"]))
+        provdict["client2ws"] = {}
         for client, fit_res in results:
-            print(
-                f"\n **** Custom Metrics from clients: client : {client.cid}, metrics: {fit_res.metrics}" )
+            print(f"cid_client: {client.partition_id}")
+            provdict["client2ws"][client.partition_id] = getWeightsByParam(fit_res.parameters, input_shape=self.input_shape)
+        for client, fit_res in results:
+            print(f"\n **** Custom Metrics from clients: client : {client.partition_id}, metrics: {fit_res.metrics}" )
         malacious_clients2conf, acc = self.run_filter(client2model_ws=provdict["client2ws"])
         self.update_results_client(malacious_clients2confidence=malacious_clients2conf, results=results)
         aggregated_parameters, aggregated_metrics = super().aggregate_fit(server_round, results, failures)
@@ -72,11 +74,13 @@ class FedAvgCustomStrategy(fl.server.strategy.FedAvg):
         print(f"malacious_clients2confidence:{malacious_clients2confidence}")
         min_nk = min([r[1].num_examples for r in results])
         for i in range(len(results)):
-            cid =  results[i][0].cid
+            cid =  results[i][0].partition_id
             if cid in malacious_clients2confidence:
                 before = results[i][1].num_examples
                 #то есть если доверие меньше 70 процентов, то он обнуляется
-                if malacious_clients2confidence[cid] <= 0.6:
+                if malacious_clients2confidence[cid] < 0.6:
+                    if not(cid in conf_app.FL_conf["bad_clients"]):
+                        resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"]["result"] = False
                     results[i][1].num_examples = 0
                 else:
                     results[i][1].num_examples = int(min_nk * (malacious_clients2confidence[cid]))
