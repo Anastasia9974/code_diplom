@@ -34,35 +34,25 @@ def get_activations(model, img):
     all_activations = []  # Список для всех активаций
 
     for activation in activations:
-        # Получаем количество активированных нейронов для данного слоя
-        if len(activation.shape) > 3:  # Если 4D (batch_size, height, width, channels)
-            # Для свёрточных слоев
-            active_neurons = tf.reduce_sum(tf.cast(activation > 0, tf.float32)).numpy()  # Считаем активированные нейроны
-        elif len(activation.shape) == 2:  # Если 2D (batch_size, features)
-            # Для полносвязанных слоёв
-            active_neurons = tf.reduce_sum(tf.cast(activation > 0, tf.float32)).numpy()  # Считаем активированные нейроны
-        else:
-            active_neurons = 0
-
-        # Обрабатываем активации для градиентов
-        if len(grads.shape) > 1 and len(activation.shape) > 3:  # Если 4D (batch_size, height, width, channels)
-            # Изменяем размер градиентов, если необходимо
+        if grads is not None and len(grads.shape) > 1 and len(activation.shape) > 3:
             if grads.shape[1:3] != activation.shape[1:3]:
                 grads_resized = tf.image.resize(grads, size=(activation.shape[1], activation.shape[2]))
             else:
                 grads_resized = grads
-            grad_times_activation = grads_resized * activation
-            grad_times_activations.append(grad_times_activation)
-        elif len(activation.shape) == 2:  # Если 2D (batch_size, features)
-            # Просто пропускаем или обрабатываем по-другому (зависит от задачи)
-            grad_times_activations.append(None)
-        else:
-            grad_times_activations.append(None)
 
-        # Сплющиваем активацию для каждого слоя
-        flattened_activation = tf.reshape(activation, [-1])  # Сплющиваем активацию для данного слоя
-        layer2output.append(flattened_activation)  # Добавляем сплющенные активации для данного слоя
-        all_activations.append(flattened_activation.numpy())  # Добавляем в список для всех слоев
+            # Новая проверка: совпадает ли количество каналов
+            if grads_resized.shape[-1] == activation.shape[-1]:
+                grad_times_activation = grads_resized * activation
+            else:
+                grad_times_activation = None  # Не можем корректно перемножить
+        else:
+            grad_times_activation = None
+
+        grad_times_activations.append(grad_times_activation)
+
+        flattened_activation = tf.reshape(activation, [-1])
+        layer2output.append(flattened_activation)
+        all_activations.append(flattened_activation.numpy())
 
     # Конкатенируем все активации в одну
     concatenated_activations = np.concatenate(all_activations, axis=0)
@@ -181,7 +171,7 @@ class fedDefender:
         self.all_fedfuzz_seqs = []
         self.participating_clients_ids = None
         self.all_combinations = None
-    def run_filter(self,result_clients, nc_t, part_math_wait):
+    def run_filter(self,result_clients, nc_t, part_math_wait, server_round, loss = 0):
         self.all_combinations = makeAllSubsetsofSizeN(set(list(result_clients.keys())), len(result_clients) - 1)
         self.participating_clients_ids = set(list(result_clients.keys()))
         self.generation_test_data()

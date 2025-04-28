@@ -72,8 +72,10 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
         provdict["client2ws"] = {client.partition_id: getWeightsByParam(fit_res.parameters, input_shape=self.input_shape) for
                                  client, fit_res in results}
         for client, fit_res in results:
-            print(f"\n **** Custom Metrics from clients: client : {client.partition_id}, metrics: {fit_res.metrics}")
-        malacious_clients2conf, _ = self.run_filter(client2model_ws=provdict["client2ws"])
+            print(f"**** Custom Metrics from clients: client : {client.partition_id}, metrics: {fit_res.metrics}")
+
+
+        malacious_clients2conf, _ = self.run_filter(client2model_ws=provdict["client2ws"], results_cl=results)
         self.update_results_client(malacious_clients2confidence=malacious_clients2conf, results=results)
 
         weights_list = [parameters_to_ndarrays(fit_res.parameters) for _, fit_res in results]
@@ -114,16 +116,36 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
             resualt_work.resualt_FL[heading][f"rounds_{server_round}"] = [[arr.tolist() for arr in agg_weights], 0, malacious_clients2conf]
         return ndarrays_to_parameters(agg_weights), aggregated_metrics
 
-    def run_filter(self, client2model_ws):
+    def definition_loss(self, results_cl):
+        # Агрегация потерь (loss)
+        loss_sum = 0.0
+        total_examples = 0
+        for client, fit_res in results_cl:
+            client_loss = fit_res.metrics.get("loss", None)
+            num_examples = fit_res.num_examples
+
+            if client_loss is not None:
+                loss_sum += client_loss * num_examples
+                total_examples += num_examples
+        # Среднее значение loss (если хотя бы один клиент его передал)
+        if total_examples > 0:
+            avg_loss = loss_sum / total_examples
+            return avg_loss
+        else:
+            avg_loss = None
+            return avg_loss
+    def run_filter(self, client2model_ws, results_cl):
         client2model = {cid: CNN(input_shape=self.input_shape).model for cid in client2model_ws.keys()}
         for cid, model in client2model.items():
             model.set_weights(client2model_ws[cid])
-        potential_malclient2_confidence, feddfuzz_acc = self.filter_func.run_filter(result_clients = client2model, nc_t=0.0, part_math_wait=self.part_math_wait)
+        potential_malclient2_confidence, feddfuzz_acc = self.filter_func.run_filter(result_clients = client2model, nc_t=0.0, part_math_wait=self.part_math_wait, server_round=self.server_round, loss = self.definition_loss(results_cl=results_cl))
         return potential_malclient2_confidence, feddfuzz_acc
 
     def update_results_client(self, malacious_clients2confidence :dict[str:int], results: List[Tuple[fl.server.client_proxy.ClientProxy, fl.common.FitRes]]):# тут как раз вклад оценивается, надо подкоректировать завтра будет
         # fuzz_inputs = 10
         print(f"malacious_clients2confidence:{malacious_clients2confidence}")
+        resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"][
+            "result"] = True
         min_nk = min([r[1].num_examples for r in results])
         for i in range(len(results)):
             cid =  results[i][0].partition_id

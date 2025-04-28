@@ -61,7 +61,7 @@ class FederatedServer:
         for i in range(num_test):
             resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"] = {"data_name":conf_app.database_conf["name_dataset"]}
             resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"] = {"data_name":conf_app.database_conf["name_dataset"]}
-            resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"] = {"result":True}
+            resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"] = {}
             history = flwr.simulation.start_simulation(
                 client_fn=get_client_fn_with_data(epochs=conf_app.NN_conf["epochs"],
                                                   batch_size=conf_app.database_conf["batch_size"],
@@ -77,7 +77,7 @@ class FederatedServer:
                 if self.name_strategy == "reliable_aggregation":
                     resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"][f"rounds_{rnd}"][1] = loss[1]
                     resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"][f"rounds_{rnd}"][1] = loss[1]
-                resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"]["loss"] = loss[1]
+                resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{rnd}"]["loss"] = loss[1]
                 for heading in resualt_work.resualt_FL:
                     resualt_work.resualt_FL[heading][f"rounds_{rnd}"][1] = loss[1]
             if conf_app.view_resualt["mode_work"] == "change_param_agg_1":

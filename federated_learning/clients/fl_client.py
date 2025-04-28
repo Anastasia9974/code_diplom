@@ -20,6 +20,7 @@ from new_code.federated_learning.NN.train import training_model
 from new_code.federated_learning.NN.test import testing_model
 from  new_code.work_with_datasets.change_db import change_db
 from new_code.attacks.backdoor_atack import backdoor
+from new_code.attacks.poisoning_attack import label_flipping_attack
 class FederatedClient(flwr.client.Client):
     def __init__(self, client_id, model, train_data, test_data, epochs):
         self.client_id = client_id
@@ -86,8 +87,11 @@ def get_client_fn_with_data(epochs:int, batch_size, attacks, bad_clients,  data_
             print(f"bad_clients: {bad_clients}")
             data_for_cl["train_data"][int(client_id)] = backdoor(train_ds=data_for_cl["train_data"][int(client_id)], clients_id=client_id)
             data_for_cl["test_data"][int(client_id)] = backdoor(train_ds=data_for_cl["test_data"][int(client_id)], clients_id=client_id)
-        else:
+        elif attacks == "label_flipping" and (int(client_id) in bad_clients):
             #тут какая нибудь другая атака должна быть
+            print(f"bad_clients: {bad_clients}")
+            data_for_cl["train_data"][int(client_id)] = label_flipping_attack(train_ds=data_for_cl["train_data"][int(client_id)], client_id=client_id, classes_to_flip=[0, 1, 2], flip_target=9)
+            data_for_cl["test_data"][int(client_id)] = label_flipping_attack(train_ds=data_for_cl["test_data"][int(client_id)], client_id=client_id, classes_to_flip=[0, 1, 2], flip_target=9)
             ...
         train_data, test_data = change_db(db_cl=data_for_cl, cid=int(client_id), batch_size=batch_size)
         # Return Client instance

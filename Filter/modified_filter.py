@@ -4,16 +4,13 @@ from torch.nn.init import (kaiming_normal_, kaiming_uniform_, normal_,
                            xavier_normal_, xavier_uniform_)
 import torch
 import gc
-import itertools
-import torchvision
-from captum.attr import LayerGradientXActivation
-from new_code.work_with_datasets.generation_for_filter import FuzzGeneration
+import numpy as np
 from keras import Model
-import keras
 import tensorflow as tf
 from new_code.conf import resualt_work
-import numpy as np
-
+from new_code.Filter.metods_for_patam_filter.model.model import ModelForParam
+from new_code.Filter.metods_for_patam_filter.math_metod.r_distribution import RDistributionForParam
+from new_code.work_with_datasets.generation_for_filter import FuzzGeneration
 # def getAllLayers(model):
 #     layers = []
 #     for layer in model.layers:
@@ -47,35 +44,25 @@ def get_activations(model, img):
     all_activations = []  # Список для всех активаций
 
     for activation in activations:
-        # Получаем количество активированных нейронов для данного слоя
-        if len(activation.shape) > 3:  # Если 4D (batch_size, height, width, channels)
-            # Для свёрточных слоев
-            active_neurons = tf.reduce_sum(tf.cast(activation > 0, tf.float32)).numpy()  # Считаем активированные нейроны
-        elif len(activation.shape) == 2:  # Если 2D (batch_size, features)
-            # Для полносвязанных слоёв
-            active_neurons = tf.reduce_sum(tf.cast(activation > 0, tf.float32)).numpy()  # Считаем активированные нейроны
-        else:
-            active_neurons = 0
-
-        # Обрабатываем активации для градиентов
-        if len(grads.shape) > 1 and len(activation.shape) > 3:  # Если 4D (batch_size, height, width, channels)
-            # Изменяем размер градиентов, если необходимо
+        if grads is not None and len(grads.shape) > 1 and len(activation.shape) > 3:
             if grads.shape[1:3] != activation.shape[1:3]:
                 grads_resized = tf.image.resize(grads, size=(activation.shape[1], activation.shape[2]))
             else:
                 grads_resized = grads
-            grad_times_activation = grads_resized * activation
-            grad_times_activations.append(grad_times_activation)
-        elif len(activation.shape) == 2:  # Если 2D (batch_size, features)
-            # Просто пропускаем или обрабатываем по-другому (зависит от задачи)
-            grad_times_activations.append(None)
-        else:
-            grad_times_activations.append(None)
 
-        # Сплющиваем активацию для каждого слоя
-        flattened_activation = tf.reshape(activation, [-1])  # Сплющиваем активацию для данного слоя
-        layer2output.append(flattened_activation)  # Добавляем сплющенные активации для данного слоя
-        all_activations.append(flattened_activation.numpy())  # Добавляем в список для всех слоев
+            # Новая проверка: совпадает ли количество каналов
+            if grads_resized.shape[-1] == activation.shape[-1]:
+                grad_times_activation = grads_resized * activation
+            else:
+                grad_times_activation = None  # Не можем корректно перемножить
+        else:
+            grad_times_activation = None
+
+        grad_times_activations.append(grad_times_activation)
+
+        flattened_activation = tf.reshape(activation, [-1])
+        layer2output.append(flattened_activation)
+        all_activations.append(flattened_activation.numpy())
 
     # Конкатенируем все активации в одну
     concatenated_activations = np.concatenate(all_activations, axis=0)
@@ -94,9 +81,11 @@ def getNeuronCoverage(model, img):
 class ModifiedNewFilter:
     def __init__(self, round, dname, input_shape):
         self.round = round
+        self.server_round = 0
         self.dname = dname
         self.input_shape = input_shape
         self.fuzz_gen_data = None
+        self.loss = 0
         self.clients2fuzzinputs_neurons_activations = {}
         self.client2layeracts = {}
         self.all_fedfuzz_seqs = []
@@ -138,26 +127,53 @@ class ModifiedNewFilter:
             total_sum += sed.numpy()  # Получаем числовое значение из тензора
             sed1[cid] = sed.numpy()  # Сохраняем значение в sed1
 
-
-        # Среднее значение для всех клиентов
-        math_wait = total_sum / len(clients_neurons2boolact)
-        pogr = math_wait * part_math_wait
-        without_attacks = 0
-        print(sed1)
-        print(pogr)
-        print(math_wait)
-        #sed1 количиство нейронов совпадающих для клиентов между собой
+        result_cl = []
         with_attacks_ind = []
+        without_attacks = 0
+        if part_math_wait == -1:#использование матана
+            choice_param = RDistributionForParam(common_active_neurons_clients=sed1, num_client=len(sed1))
+            result_cl = choice_param.get_result_client()
+        elif part_math_wait == -2:#использование модели
+            choice_param = ModelForParam(
+                file_name_with_dataset_json = "/home/anvi/code_diplom/new_code/results/data_for_model.json",
+                file_name_with_dataset_csv = "/home/anvi/code_diplom/new_code/results/data_for_model.csv",
+                file_name_for_result_model = "/home/anvi/code_diplom/new_code/results/result_learning_model_param.pkl"
+            )
+            result_cl = choice_param.get_result_client(
+                diff_neurons = int(sed1[max(sed1, key=sed1.get)] - sed1[min(sed1, key=sed1.get)]),
+                loss_value = self.loss,
+                common_active_neurons_clients=sed1
+            )
+        else:
+            # Среднее значение для всех клиентов
+            math_wait = total_sum / len(clients_neurons2boolact)
+            pogr = math_wait * part_math_wait
+            print(sed1)
+            print(pogr)
+            print(math_wait)
+            # sed1 количиство нейронов совпадающих для клиентов между собой
+            for cid in sed1:
+                if sed1[cid] > math_wait - pogr:
+                    without_attacks += 1
+                else:
+                    with_attacks_ind.append(cid)
+            resualt_work.resualt_get_data_for_model[f"part_math_wait_{part_math_wait}"][
+                f"round:{self.server_round}"] = {}
+            resualt_work.resualt_get_data_for_model[f"part_math_wait_{part_math_wait}"][f"round:{self.server_round}"][
+                "diff_neurons"] = int(sed1[max(sed1, key=sed1.get)] - sed1[min(sed1, key=sed1.get)])
+            return with_attacks_ind
 
-        for cid in sed1:
-            if sed1[cid] > math_wait - pogr:
-                without_attacks += 1
+
+        for cl, x in result_cl.items():
+            if x == False:
+                with_attacks_ind.append(cl)
             else:
-                with_attacks_ind.append(cid)
-
+                without_attacks += 1
+        print(f"common_active_neurons_clients: {sed1}")
+        print(f"result_cl: {result_cl}")
         print(f"Without_attacks: {without_attacks}")
-        resualt_work.resualt_get_data_for_model[f"part_math_wait_{part_math_wait}"][f"round:{self.round}"] = {}
-        resualt_work.resualt_get_data_for_model[f"part_math_wait_{part_math_wait}"][f"round:{self.round}"]["diff_neurons"] = int(sed1[max(sed1, key=sed1.get)] - sed1[min(sed1, key=sed1.get)])
+        resualt_work.resualt_get_data_for_model[f"part_math_wait_{part_math_wait}"][f"round:{self.server_round}"] = {}
+        resualt_work.resualt_get_data_for_model[f"part_math_wait_{part_math_wait}"][f"round:{self.server_round}"]["diff_neurons"] = int(sed1[max(sed1, key=sed1.get)] - sed1[min(sed1, key=sed1.get)])
         return with_attacks_ind
 
     def torchIntersetion(self, client2tensors):
@@ -194,7 +210,9 @@ class ModifiedNewFilter:
             probability_malicious_ids[key] = 1 - value / num_test_data
         return probability_malicious_ids
 
-    def run_filter(self,result_clients, nc_t, part_math_wait):
+    def run_filter(self,result_clients, nc_t, part_math_wait, server_round, loss = 0):
+        self.server_round = server_round
+        self.loss = loss
         self.generation_test_data()
         self.filter(result_clients, nc_t, part_math_wait)
         result = self.getPotentialMaliciousClients(num_test_data=len(self.fuzz_gen_data))
