@@ -39,7 +39,7 @@ class WorkWithDataset:
         else:
             print("Not a valid dataset")
     # обработка данных
-    def data_processing(self, input_shape, batch_size:int = 512):
+    def data_processing(self, input_shape, batch_size:int = 128):
         def dataset_to_tf(dataset, batch_size, input_shape):
             def generator():
                 for image, label in dataset:
@@ -53,23 +53,50 @@ class WorkWithDataset:
                 )
             ).batch(batch_size)
 
-        self.trainloader_server = dataset_to_tf(self.train_ds,batch_size, input_shape=input_shape)
-        self.testloader_server = dataset_to_tf(self.test_ds,batch_size, input_shape=input_shape)
+        self.trainloader_server = dataset_to_tf(self.trainloader_server,batch_size, input_shape=input_shape)
+        self.testloader_server = dataset_to_tf(self.testloader_server,batch_size, input_shape=input_shape)
         for i in range(len(self.trainloader_client)):
             self.trainloader_client[i] = dataset_to_tf(self.trainloader_client[i],batch_size, input_shape=input_shape)
             self.testloader_client[i] = dataset_to_tf(self.testloader_client[i],batch_size, input_shape=input_shape)
     # деление датасета на всех клиентов
-    def data_division(self, num_client: int, test_percent: int):
-        partition_size = int(len(self.train_ds) / num_client)
-        lengths = [partition_size]*num_client
+    def data_division(self, num_client: int, test_percent: float):
+        # Проверка входных данных
+        if not 0 < test_percent < 1:
+            raise ValueError("test_percent должен быть между 0 и 1")
+
+        # 1. Сначала разделим весь train_ds на клиентов
+        total_size = len(self.train_ds)
+        partition_size = total_size // num_client
+        remainder = total_size % num_client
+
+        # Создаем lengths с учетом остатка
+        lengths = [partition_size] * num_client
+        for i in range(remainder):
+            lengths[i] += 1
+
+        # Разделяем основной датасет между клиентами
         self.dataset = random_split(self.train_ds, lengths, torch.Generator().manual_seed(42))
-        for ds in self.dataset:
-            len_test_client = len(ds)//test_percent
-            len_train_client = len(ds) - len_test_client
-            lengths = [len_train_client, len_test_client]
-            ds_train, ds_val = random_split(ds, lengths, torch.Generator().manual_seed(42))
+
+        # 2. Для каждого клиента разделяем его данные на train и test
+        self.trainloader_client = []
+        self.testloader_client = []
+
+        for client_ds in self.dataset:
+            client_size = len(client_ds)
+            test_size = int(client_size * test_percent)
+            train_size = client_size - test_size  # Гарантирует точное соответствие
+
+            # Разделяем данные клиента
+            ds_train, ds_test = random_split(
+                client_ds,
+                [train_size, test_size],
+                torch.Generator().manual_seed(42)
+            )
+
             self.trainloader_client.append(ds_train)
-            self.testloader_client.append(ds_val)
+            self.testloader_client.append(ds_test)
+
+        # 3. Сохраняем оригинальные датасеты для сервера
         self.trainloader_server = self.train_ds
         self.testloader_server = self.test_ds
 

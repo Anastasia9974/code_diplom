@@ -52,7 +52,7 @@ from new_code.conf import resualt_work, conf_app
 
 #делаем наследником fl.server.strategy.FedAvg, чтобы не переопределять кучу классов
 class ReliableAggregation(fl.server.strategy.FedAvg):
-    def __init__(self, tau, filter_func, part_math_wait, input_shape, i_iter=1):
+    def __init__(self, tau, filter_func, part_math_wait, input_shape, initial_parameters, i_iter=1):
         self.tau = tau
         self.i_iter = i_iter
         self.filter_func = filter_func
@@ -60,13 +60,14 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
         self.input_shape = input_shape
         self.momentum = None
         self.server_round = 0
-        super().__init__()
+        super().__init__(initial_parameters=initial_parameters)
 
     def aggregate_fit(self,
                       server_round: int,
                       results: List[Tuple[fl.server.client_proxy.ClientProxy, fl.common.FitRes]],
                       failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]], ) \
             -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
+        #server_round = server_round + 4
         self.server_round = server_round
         provdict = {}
         provdict["client2ws"] = {client.partition_id: getWeightsByParam(fit_res.parameters, input_shape=self.input_shape) for
@@ -82,7 +83,6 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
         client_weights = np.array([fit_res.num_examples for _, fit_res in results], dtype=np.float32)
         client_weights_sum = np.sum(client_weights)
         client_weights = client_weights / (client_weights_sum + 1e-6)
-        n_clients = len(weights_list)
 
         # 1. Начальная инициализация центра
         center = [sum(w * client_weights[i] for i, w in enumerate(layer)) for layer in zip(*weights_list)]
@@ -98,6 +98,7 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
 
                 # Обрезка
                 scale = min(1.0, self.tau / (norm + 1e-6))
+                print(f"scale: {scale}, norm: {norm}, tau: {self.tau}")
                 clipped_deltas = [scale * d for d in deltas]
                 clipped_deltas_list.append(clipped_deltas)
 
@@ -110,10 +111,13 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
         # После итераций, финальный агрегированный результат — это центр
         agg_weights = center
         aggregated_metrics = {"example_metric": 1.0}
-        resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"][f"rounds_{server_round}"]=[[arr.tolist() for arr in agg_weights], 0]
-        resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"][f"rounds_{server_round}"]=[[arr.tolist() for arr in agg_weights], 0]
+        print(f"server_round: {server_round}")
+        if conf_app.view_resualt["mode_work"] == "change_param_agg_1":
+            resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"][f"rounds_{server_round}"]=[[arr.tolist() for arr in agg_weights], 0]
+        if conf_app.view_resualt["mode_work"] == "change_param_agg_2":
+            resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"][f"rounds_{server_round}"]=[[arr.tolist() for arr in agg_weights], 0]
         for heading in resualt_work.resualt_FL:
-            resualt_work.resualt_FL[heading][f"rounds_{server_round}"] = [[arr.tolist() for arr in agg_weights], 0, malacious_clients2conf]
+             resualt_work.resualt_FL[heading][f"rounds_{server_round}"] = [[arr.tolist() for arr in agg_weights], 0, malacious_clients2conf]
         return ndarrays_to_parameters(agg_weights), aggregated_metrics
 
     def definition_loss(self, results_cl):
@@ -144,7 +148,8 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
     def update_results_client(self, malacious_clients2confidence :dict[str:int], results: List[Tuple[fl.server.client_proxy.ClientProxy, fl.common.FitRes]]):# тут как раз вклад оценивается, надо подкоректировать завтра будет
         # fuzz_inputs = 10
         print(f"malacious_clients2confidence:{malacious_clients2confidence}")
-        resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"][
+        if conf_app.view_resualt["mode_work"] == "change_param_filter":
+            resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"][
             "result"] = True
         min_nk = min([r[1].num_examples for r in results])
         for i in range(len(results)):
@@ -152,8 +157,8 @@ class ReliableAggregation(fl.server.strategy.FedAvg):
             if cid in malacious_clients2confidence:
                 before = results[i][1].num_examples
                 #то есть если доверие меньше 60 процентов, то он обнуляется
-                if malacious_clients2confidence[cid] < 0.6:
-                    if not(cid in conf_app.FL_conf["bad_clients"]):
+                if malacious_clients2confidence[cid] <= 0.5:
+                    if not(cid in conf_app.FL_conf["bad_clients"]) and conf_app.view_resualt["mode_work"] == "change_param_filter":
                         resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"]["result"] = False
                     results[i][1].num_examples = 0
                 else:

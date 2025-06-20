@@ -107,7 +107,7 @@ class fedDefender:
         max_t = 1
         random_generator = kaiming_normal_
         apply_transform = True
-        num_inputs_test_data = 10
+        num_inputs_test_data = 40
         fuzz_gen = FuzzGeneration(input_shape=self.input_shape, randomGenerator=random_generator,
                        apply_transform=apply_transform, dname=self.dname, majority_threshold=5, num_test_data=num_inputs_test_data,
                        min_t=min_t, max_t=max_t)
@@ -172,6 +172,7 @@ class fedDefender:
         self.participating_clients_ids = None
         self.all_combinations = None
     def run_filter(self,result_clients, nc_t, part_math_wait, server_round, loss = 0):
+        print(f"FedDefender, round:{server_round}")
         self.all_combinations = makeAllSubsetsofSizeN(set(list(result_clients.keys())), len(result_clients) - 1)
         self.participating_clients_ids = set(list(result_clients.keys()))
         self.generation_test_data()

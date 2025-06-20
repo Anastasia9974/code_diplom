@@ -16,9 +16,9 @@ class Config:
 #значения filter: "fedDefender", "new_metod", "not"
 #значения aggregation_strategy: "reliable_aggregation", "FedAvg"
 #значения mode_work: "change_param_agg_1", "change_param_agg_2", "change_param_filter", "not"
-# значения attacks: "backdoor"
-# значения part_math_wait: -1 - математический способ подбора параметра, -2 - при помощи модели подбор параметра
-# пусть раундов будет 12, а клиентов например 15
+# значения attacks: "backdoor", "label_flipping"
+# значения part_math_wait: -1 - математический способ подбора параметра
+# пусть раундов будет 8, а клиентов например 12
 conf_app = Config()
 
 class Resualt:

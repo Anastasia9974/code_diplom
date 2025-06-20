@@ -1,16 +1,18 @@
 {
-  "without_attacks": {
+
+  "with_attacks_backdoor_Fed_security_3attacks_mnist": {
     "name_dataset":"cifar10",
-    "test_percent":10,
-    "batch_size": 512,
-    "epochs":2,
-    "num_client":4,
+    "test_percent":0.1,
+    "batch_size": 128,
+    "epochs":10,
+    "num_client":2,
     "num_infected_clients":0,
     "bad_clients": [],
-    "num_round":3,
-    "aggregation_strategy": "reliable_aggregation",
+    "num_round":4,
+    "aggregation_strategy": "FedAvg",
     "filter": "not",
-    "attacks": "not",
-    "mode_work": "not"
+    "attacks": "backdoor",
+    "mode_work": "not",
+    "part_math_wait": -1
   }
 }

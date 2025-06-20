@@ -95,7 +95,7 @@ class ModifiedNewFilter:
         max_t = 1
         random_generator = kaiming_normal_
         apply_transform = True
-        num_inputs_test_data = 10
+        num_inputs_test_data = 40
         fuzz_gen = FuzzGeneration(input_shape=self.input_shape, randomGenerator=random_generator,
                        apply_transform=apply_transform, dname=self.dname, majority_threshold=5, num_test_data=num_inputs_test_data,
                        min_t=min_t, max_t=max_t)
@@ -131,7 +131,7 @@ class ModifiedNewFilter:
         with_attacks_ind = []
         without_attacks = 0
         if part_math_wait == -1:#использование матана
-            choice_param = RDistributionForParam(common_active_neurons_clients=sed1, num_client=len(sed1))
+            choice_param = RDistributionForParam(common_active_neurons_clients=sed1, num_client=len(sed1), num_server=self.server_round)
             result_cl = choice_param.get_result_client()
         elif part_math_wait == -2:#использование модели
             choice_param = ModelForParam(

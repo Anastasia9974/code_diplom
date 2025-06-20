@@ -9,12 +9,12 @@ from new_code.conf import resualt_work, conf_app
 from new_code.work_with_file_resualts.write_in_file import write_in_file_csv
 #добавить возможно сохранение верультатов обучения, но это дальше
 class FedAvgCustomStrategy(fl.server.strategy.FedAvg):
-    def __init__(self, filter_func, part_math_wait, input_shape):
+    def __init__(self, filter_func, part_math_wait, input_shape, initial_parameters):
         self.filter_func = filter_func
         self.part_math_wait = part_math_wait
         self.input_shape = input_shape
         self.server_round = 0
-        super().__init__()
+        super().__init__(initial_parameters=initial_parameters)
     def aggregate_fit(
             self,
             server_round: int,
@@ -22,6 +22,7 @@ class FedAvgCustomStrategy(fl.server.strategy.FedAvg):
             failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
     ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
         #Вызовите aggregate_fit из базового класса (FedAvg) для агрегирования параметров и метрик
+        #server_round  = server_round+4
         self.server_round = server_round
         provdict = {}
         provdict["client2ws"] = {}
@@ -55,8 +56,8 @@ class FedAvgCustomStrategy(fl.server.strategy.FedAvg):
     def update_results_client(self, malacious_clients2confidence :dict[str:int], results: List[Tuple[fl.server.client_proxy.ClientProxy, fl.common.FitRes]]):# тут как раз вклад оценивается, надо подкоректировать завтра будет
         # fuzz_inputs = 10
         print(f"malacious_clients2confidence:{malacious_clients2confidence}")
-        resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"][
-            "result"] = True
+        #resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"][
+        #    "result"] = True
         min_nk = min([r[1].num_examples for r in results])
         for i in range(len(results)):
             cid =  results[i][0].partition_id
@@ -64,8 +65,8 @@ class FedAvgCustomStrategy(fl.server.strategy.FedAvg):
                 before = results[i][1].num_examples
                 #то есть если доверие меньше 70 процентов, то он обнуляется
                 if malacious_clients2confidence[cid] < 0.6:
-                    if not(cid in conf_app.FL_conf["bad_clients"]):
-                        resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"]["result"] = False
+                    # if not(cid in conf_app.FL_conf["bad_clients"]):
+                    #     resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{self.server_round}"]["result"] = False
                     results[i][1].num_examples = 0
                 else:
                     results[i][1].num_examples = int(min_nk * (malacious_clients2confidence[cid]))

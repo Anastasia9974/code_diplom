@@ -19,8 +19,7 @@ from new_code.federated_learning.NN.model import CNN
 from new_code.federated_learning.NN.train import training_model
 from new_code.federated_learning.NN.test import testing_model
 from  new_code.work_with_datasets.change_db import change_db
-from new_code.attacks.backdoor_atack import backdoor
-from new_code.attacks.poisoning_attack import label_flipping_attack
+from new_code.attacks.get_attacks import get_attacks
 class FederatedClient(flwr.client.Client):
     def __init__(self, client_id, model, train_data, test_data, epochs):
         self.client_id = client_id
@@ -83,17 +82,9 @@ def get_client_fn_with_data(epochs:int, batch_size, attacks, bad_clients,  data_
         # Load model and data
         input_shape = data_for_cl["train_data"][int(client_id)][0][0].shape
         model = CNN(input_shape=input_shape)
-        if attacks == "backdoor" and (int(client_id) in bad_clients):
-            print(f"bad_clients: {bad_clients}")
-            data_for_cl["train_data"][int(client_id)] = backdoor(train_ds=data_for_cl["train_data"][int(client_id)], clients_id=client_id)
-            data_for_cl["test_data"][int(client_id)] = backdoor(train_ds=data_for_cl["test_data"][int(client_id)], clients_id=client_id)
-        elif attacks == "label_flipping" and (int(client_id) in bad_clients):
-            #тут какая нибудь другая атака должна быть
-            print(f"bad_clients: {bad_clients}")
-            data_for_cl["train_data"][int(client_id)] = label_flipping_attack(train_ds=data_for_cl["train_data"][int(client_id)], client_id=client_id, classes_to_flip=[0, 1, 2], flip_target=9)
-            data_for_cl["test_data"][int(client_id)] = label_flipping_attack(train_ds=data_for_cl["test_data"][int(client_id)], client_id=client_id, classes_to_flip=[0, 1, 2], flip_target=9)
-            ...
-        train_data, test_data = change_db(db_cl=data_for_cl, cid=int(client_id), batch_size=batch_size)
+        model.show_arhitecture()
+        change_data = get_attacks(attacks=attacks, bad_clients=bad_clients, client_id=client_id, data_for_cl=data_for_cl)
+        train_data, test_data = change_db(db_cl=change_data, cid=int(client_id), batch_size=batch_size)
         # Return Client instance
         return FederatedClient(model=model, client_id=cid, epochs=epochs, train_data=train_data,
                                test_data=test_data).to_client()

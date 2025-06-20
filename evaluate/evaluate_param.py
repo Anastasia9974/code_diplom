@@ -28,46 +28,46 @@ class EvaluateParam:
         # Преобразуем в ndarrays
         return ndarrays
     
-    def data_transformation(self):
-        with open(self.name_file_resault_json, "r") as json_file:
-            data_results_param = json.load(json_file)
-        for section, var in data_results_param.items():
-            raund_acc = []
-            raund_loss = []
-            for raunds in var:
-                if raunds == "data_name":
-                    continue
-                weights = self.convert_json_to_ndarrays(var[raunds][0])
-                loss = var[raunds][1]
-                self.model.model.set_weights(weights)
-                _, accuracy = testing_model(model=self.model, test_ds=self.test_data)
-                raund_acc.append(accuracy)
-                raund_loss.append(loss)
-            self.result_acc[section] = raund_acc
-            self.result_loss[section] = raund_loss
-    def get_name_dataset(self):
+    def data_transformation(self, section, var):#передать данные сюда и переписать немного саму функцию
+        raund_acc = []
+        raund_loss = []
+        for raunds in var:
+            if raunds == "data_name":
+                continue
+            weights = self.convert_json_to_ndarrays(var[raunds][0])
+            loss = var[raunds][1]
+            self.model.model.set_weights(weights)
+            _, accuracy = testing_model(model=self.model, test_ds=self.test_data)
+            raund_acc.append(accuracy)
+            raund_loss.append(loss)
+        self.result_acc[section] = raund_acc
+        self.result_loss[section] = raund_loss
+        # with open(self.name_file_resault_json, "r") as json_file:
+        #     data_results_param = json.load(json_file)
+        # for section, var in data_results_param.items():
+
+    def get_data_test_and_set_model(self):
+        db = WorkWithDataset()
+        db.download_dataset(data_name=self.data_name)
+        db.data_division(num_client=12, test_percent=0.1)
+        (_, _, _, self.test_data) = db.get_dataset()
+        self.model = CNN(input_shape=self.test_data[0][0].shape)
+        db.data_processing(batch_size = 128, input_shape=self.test_data[0][0].shape)
+        (_, _, _, self.test_data) = db.get_dataset()
+
+    def start(self):
         with open(self.name_file_resault_json, "r") as json_file:
             data_with_conf = json.load(json_file)
         for section, var in data_with_conf.items():
             for section2, var2 in var.items():
                 if section2 == "data_name":
                     self.data_name = var2
-                    return
-    def get_data_test_and_set_model(self):
-        db = WorkWithDataset()
-        db.download_dataset(data_name=self.data_name)
-        db.data_division(num_client=1, test_percent=10)
-        (_, _, _, self.test_data) = db.get_dataset()
-        self.model = CNN(input_shape=self.test_data[0][0].shape)
-        db.data_processing(batch_size = 512, input_shape=self.test_data[0][0].shape)
-        (_, _, _, self.test_data) = db.get_dataset()
-
-    def start(self):
-        self.get_name_dataset()
-        self.get_data_test_and_set_model()
-        self.data_transformation()
-        self.show_result()
+                    self.get_data_test_and_set_model()
+                    break
+            self.data_transformation(section, var)
+        #self.show_result()
         self.print_result()
+
 
     def show_result(self):
         fig, ax = plt.subplots()
@@ -100,7 +100,7 @@ class EvaluateParam:
         ax.yaxis.set_minor_locator(AutoMinorLocator())
         ax.yaxis.set_ticks_position('both')
         ax.xaxis.set_ticks_position('both')
-        ax.set_title(f"Тестирование точности, при {15} клиентах")
+        ax.set_title(f"Тестирование точности, при {12} клиентах")
         ax.set_xlabel('Раунд')
         ax.set_ylabel("Точность (%)")
         ax.legend()
@@ -112,7 +112,7 @@ class EvaluateParam:
         ax2.yaxis.set_minor_locator(AutoMinorLocator())
         ax2.yaxis.set_ticks_position('both')
         ax2.xaxis.set_ticks_position('both')
-        ax2.set_title(f"Тестирование функции потерь, при {15} клиентах")
+        ax2.set_title(f"Тестирование функции потерь, при {12} клиентах")
         ax2.set_xlabel('Раунд')
         ax2.set_ylabel("Значение функции потерь")
         ax2.legend()
@@ -121,7 +121,7 @@ class EvaluateParam:
         for section_acc, section_loss in zip(self.result_acc, self.result_loss):
             print_data = {}
             if "tau" in section_acc:
-                print_data["tau"] = int(str(section_acc).replace("tau_", ""))
+                print_data["tau"] = str(section_acc).replace("tau_", "")
             if "i_iter" in section_acc:
                 print_data["i_iter"] = int(str(section_acc).replace("i_iter_", ""))
             for var_acc, i, var_loss in zip(self.result_acc[section_acc], range(len(self.result_acc[section_acc])), self.result_loss[section_loss]):
@@ -130,7 +130,7 @@ class EvaluateParam:
             write_in_file_csv(name_csv_file=self.name_csv_file, data=print_data)
 
 
-evaluate_param_tau = EvaluateParam(name_file_resault_json="/home/anvi/code_diplom/new_code/results/resualt_for_param_tau.json", name_csv_file="/home/anvi/code_diplom/new_code/results/data_param_tau.csv")
+evaluate_param_tau = EvaluateParam(name_file_resault_json="/home/anvi/code_diplom/new_code/results/resualt_for_param_i_iter_attacks_cifar_1_10_4round.json", name_csv_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_tau_cifar_1_10_8round.csv")
 evaluate_param_tau.start()
-evaluate_param_i_iter = EvaluateParam(name_file_resault_json="/home/anvi/code_diplom/new_code/results/resualt_for_param_i_iter.json", name_csv_file="/home/anvi/code_diplom/new_code/results/data_param_i_iter.csv")
-evaluate_param_i_iter.start()
+# evaluate_param_i_iter = EvaluateParam(name_file_resault_json="/home/anvi/code_diplom/new_code/results/resualt_for_param_i_iter.json", name_csv_file="/home/anvi/code_diplom/new_code/results/data_param_i_iter.csv")
+# evaluate_param_i_iter.start()

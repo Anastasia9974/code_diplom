@@ -9,6 +9,7 @@
 #resualt_round_1 состоит из масисва, где записаны результаты обучения, результаты функции потерь и результаты тестирования
 #
 #
+from new_code.attacks.backdoor_atack import backdoor
 
 from sklearn.metrics import roc_curve, auc
 from sklearn.metrics import recall_score
@@ -26,6 +27,7 @@ from new_code.federated_learning.NN.test import testing_model
 from new_code.conf import conf_app
 from new_code.work_with_conf import get_conf
 from new_code.work_with_conf import set_default_conf
+from new_code.work_with_file_resualts.write_in_file import write_in_file_csv
 class EvaluateResult:
     def __init__(self, name_file_result, name_file_conf):
         self.name_file_result = name_file_result
@@ -49,7 +51,7 @@ class EvaluateResult:
                 self.data_transformation(var_result, section_result)
             set_default_conf()
         self.evaluate_accuracy_for_round()
-        self.evaluate_loss()
+        #self.evaluate_loss()
         self.evaluate_accuracy_for_all_round()
         self.evaluate_security()
     def get_data_conf(self, section,var):
@@ -61,10 +63,15 @@ class EvaluateResult:
         db = WorkWithDataset()
         db.download_dataset(data_name=conf_app.database_conf["name_dataset"])
         db.data_division(num_client=conf_app.FL_conf["num_client"], test_percent=conf_app.database_conf["test_percent"])
-        (_, _, _, self.test_data) = db.get_dataset()
+        (qwe0, qwe1, qwe, self.test_data) = db.get_dataset()
+        #self.test_data = backdoor(train_ds=self.test_data, clients_id=0)
+        db = WorkWithDataset()
+        db.set_dataset(qwe0, qwe1, qwe, self.test_data)
         self.model = CNN(input_shape=self.test_data[0][0].shape)
         db.data_processing(batch_size=conf_app.database_conf["batch_size"], input_shape=self.test_data[0][0].shape)
         (_, _, _, self.test_data) = db.get_dataset()
+
+
 
     def convert_json_to_parameters(self, data_from_json):
         # Преобразуем списки обратно в numpy.ndarray
@@ -92,7 +99,8 @@ class EvaluateResult:
 
     def evaluate_accuracy_for_round(self):
         print("evaluate accuracy for round")
-        self.show_results(data=self.result_acc, flag_made="acc")
+        write_in_file_csv("/home/anvi/code_diplom/new_code/results/1_3_attacks.csv", self.result_acc)
+        #self.show_results(data=self.result_acc, flag_made="acc")
         ...
     
     def evaluate_accuracy_for_all_round(self):
@@ -104,7 +112,7 @@ class EvaluateResult:
         ...
     def evaluate_loss(self):
         print("evaluate loss")
-        self.show_results(data=self.result_loss, flag_made="loss")
+        #self.show_results(data=self.result_loss, flag_made="loss")
         
     def show_results(self, data, flag_made):
         fig, ax = plt.subplots()
@@ -132,7 +140,7 @@ class EvaluateResult:
         ax.yaxis.set_minor_locator(AutoMinorLocator())
         ax.yaxis.set_ticks_position('both')
         ax.xaxis.set_ticks_position('both')
-        ax.set_title(f"Тестирование точности, при {15} клиентах")
+        ax.set_title(f"Тестирование точности, при {12} клиентах")
         ax.set_xlabel('Раунд')
         if flag_made == "acc":
             ax.set_ylabel("Точность (%)")

@@ -1,7 +1,7 @@
 import math
 
 class RDistributionForParam:
-    def __init__(self, common_active_neurons_clients, num_client):
+    def __init__(self, common_active_neurons_clients, num_client, num_server):
         self.common_active_neurons_clients = common_active_neurons_clients
         self.num_client = num_client
         self.r_criterion_cl = {}
@@ -9,8 +9,14 @@ class RDistributionForParam:
         self.avg = 0
         self.std = 0
         self.f = self.num_client - 2
-        self.table_val = [1.869, 1.955] # Для 5 клиентов значимость 0.05, 0.01
-        #self.table_val = [2.494, 2.800] # Для 15 клиентов
+        #self.table_val = [1.869, 1.955] # Для 5 клиентов значимость 0.05, 0.01
+
+        # if num_server == 1:
+        #     self.table_val = [1.406, 1.414]
+        # else:
+        #     self.table_val = [1.412, 1.414]
+
+        self.table_val = [1.397, 1.414]
 
 
     def definition_average(self):
@@ -20,7 +26,7 @@ class RDistributionForParam:
         total_otcl = 0
         for _, i in self.common_active_neurons_clients.items():
             total_otcl += pow(i-self.avg, 2)
-        self.std = math.sqrt(total_otcl/self.num_client)
+        self.std = math.sqrt(total_otcl/(self.num_client-1))
 
     def r_criterion(self):
         for cl, x in self.common_active_neurons_clients.items():

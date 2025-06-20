@@ -25,7 +25,14 @@ if "__main__" == __name__:
     print("CUDA version:", tf.sysconfig.get_build_info()["cuda_version"])
     print("cuDNN version:", tf.sysconfig.get_build_info()["cudnn_version"])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}\n\n\n")
+    print(f"Using device: {device}")
+
+    print(f"PyTorch: {torch.__version__}")
+    print(f"PyTorch CUDA available: {torch.cuda.is_available()}")
+    print(f"PyTorch CUDA version: {torch.version.cuda}")
+
+    print(f"\nTensorFlow: {tf.__version__}")
+    print(f"TF GPU devices: {tf.config.list_physical_devices('GPU')}\n\n\n")
     name_file_conf = "/home/anvi/code_diplom/new_code/conf.json"
     with open(name_file_conf) as json_file:
         data_with_conf = json.load(json_file)
@@ -34,6 +41,7 @@ if "__main__" == __name__:
         resualt_work.resualt_FL[section] = {}
         conf_app.security_conf["name_situation"]=section
         get_conf(data_with_conf=var)
+
         # получение данных
         db = WorkWithDataset()
         db.download_dataset(data_name=conf_app.database_conf["name_dataset"])

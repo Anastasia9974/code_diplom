@@ -12,7 +12,9 @@ from new_code.Filter.fedDefender import fedDefender
 from new_code.Filter.modified_filter import ModifiedNewFilter
 from new_code.Filter.not_filter import not_filter
 from new_code.work_with_file_resualts.write_in_file import write_in_file_csv, write_in_file_json
+import json
 import numpy as np
+import time
 class FederatedServer:
     def __init__(self, name_strategy: str, num_rounds: int, filter: str, num_clients: int, part_math_wait):
         self.name_strategy = name_strategy
@@ -23,14 +25,17 @@ class FederatedServer:
         self.config_server = flwr.server.ServerConfig(num_rounds=self.num_rounds)
         self.num_clients = num_clients
         self.part_math_wait = part_math_wait
-        self.tau = 1
-        self.i_iter=1
+        if conf_app.database_conf["name_dataset"] == "mnist":
+            self.tau = 1.5
+        else:
+            self.tau = 2.0
+        self.i_iter=9
         ...
     def get_strategy(self, filter_func):
         if self.name_strategy == "FedAvg":
-            strategy = FedAvgCustomStrategy(filter_func=filter_func, part_math_wait=self.part_math_wait, input_shape=self.input_shape)
+            strategy = FedAvgCustomStrategy(filter_func=filter_func, part_math_wait=self.part_math_wait, input_shape=self.input_shape, initial_parameters=self.parameters_model)
         elif self.name_strategy == "reliable_aggregation":
-            strategy = ReliableAggregation(tau=self.tau, i_iter=self.i_iter, filter_func=filter_func, part_math_wait=self.part_math_wait, input_shape=self.input_shape)
+            strategy = ReliableAggregation(tau=self.tau, i_iter=self.i_iter, filter_func=filter_func, part_math_wait=self.part_math_wait, input_shape=self.input_shape, initial_parameters=self.parameters_model)
         else:
             print("Invalid name_strategy")
             raise NotImplementedError
@@ -51,14 +56,28 @@ class FederatedServer:
 
     def start_train(self):
         print("Starting FL train...")
+        time.sleep(2)
         num_test = 1
         if conf_app.view_resualt["mode_work"] == "change_param_agg_1":
-            num_test = 400
+            num_test = 25
         elif conf_app.view_resualt["mode_work"] == "change_param_agg_2":
             num_test = 10
         elif conf_app.view_resualt["mode_work"] == "change_param_filter":
             num_test = int(0.7/0.01)
         for i in range(num_test):
+
+            # with open("/home/anvi/code_diplom/new_code/results/resualt_all_cifar10.json","r") as f:
+            #     data_j = json.load(f)
+            #     for section, var in data_j.items():
+            #         if section != conf_app.security_conf["name_situation"]:
+            #             continue
+            #         print(f"Section: {section}")
+            #         self.parameters_model = ndarrays_to_parameters(var["rounds_4"][0])
+            #         data_j = {}
+            #         break
+
+            if conf_app.view_resualt["mode_work"] != "not":
+                resualt_work.resualt_FL[conf_app.security_conf["name_situation"]] = {}
             resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"] = {"data_name":conf_app.database_conf["name_dataset"]}
             resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"] = {"data_name":conf_app.database_conf["name_dataset"]}
             resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"] = {}
@@ -74,20 +93,29 @@ class FederatedServer:
             )
             for rnd, loss in enumerate(history.losses_distributed, start=1):
                 print(f"Round {rnd}: {loss[1]}")
-                if self.name_strategy == "reliable_aggregation":
+                if conf_app.view_resualt["mode_work"] == "change_param_agg_1":
                     resualt_work.resualt_for_param_agg1[f"tau_{self.tau}"][f"rounds_{rnd}"][1] = loss[1]
+                if conf_app.view_resualt["mode_work"] == "change_param_agg_2":
                     resualt_work.resualt_for_param_agg2[f"i_iter_{self.i_iter}"][f"rounds_{rnd}"][1] = loss[1]
-                resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{rnd}"]["loss"] = loss[1]
+                # if conf_app.view_resualt["mode_work"] == "change_param_filter":
+                #     resualt_work.resualt_get_data_for_model[f"part_math_wait_{self.part_math_wait}"][f"round:{rnd}"]["loss"] = loss[1]
                 for heading in resualt_work.resualt_FL:
-                    resualt_work.resualt_FL[heading][f"rounds_{rnd}"][1] = loss[1]
+                     resualt_work.resualt_FL[heading][f"rounds_{rnd}"][1] = loss[1]
             if conf_app.view_resualt["mode_work"] == "change_param_agg_1":
-                self.tau += 1
+                self.tau += 0.1
+                print(f"tau: {self.tau}")
+                write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_tau_mnist_05_29.json",
+                                   data=resualt_work.resualt_for_param_agg1, made_work="a")
+                resualt_work.resualt_for_param_agg1 = {}
             elif conf_app.view_resualt["mode_work"] == "change_param_agg_2":
                 self.i_iter += 1
+                write_in_file_json(
+                    name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_i_iter_attacks_cifar_1_10_8round.json",
+                    data=resualt_work.resualt_for_param_agg2, made_work="a")
+                resualt_work.resualt_for_param_agg2 = {}
             elif conf_app.view_resualt["mode_work"] == "change_param_filter":
                 self.part_math_wait += 0.01
-        if self.name_strategy == "reliable_aggregation":
-            write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_tau.json", data = resualt_work.resualt_for_param_agg1)
-            write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/resualt_for_param_i_iter.json", data = resualt_work.resualt_for_param_agg2)
-        write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/data_for_model.json", data = resualt_work.resualt_get_data_for_model)
+            time.sleep(2)
 
+        if conf_app.view_resualt["mode_work"] == "change_param_filter":
+            write_in_file_json(name_json_file="/home/anvi/code_diplom/new_code/results/data_for_model.json", data = resualt_work.resualt_get_data_for_model)

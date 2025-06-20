@@ -6,7 +6,7 @@ import json
 #     4) пишем результаты функции потерь что при обучении глобальной модели получаются
 #     6) результат удачный параметр или нет (если найдены атакующие и ложных срабатываний нет то удачный)
 def write_in_file_csv(name_csv_file, data):
-    with open(name_csv_file, mode="w", newline="") as file:
+    with open(name_csv_file, mode="a", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=data.keys())
         writer.writeheader()
         writer.writerow(data)
